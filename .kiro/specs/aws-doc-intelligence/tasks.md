@@ -6,50 +6,50 @@ Incremental implementation of the AWS Doc Intelligence platform — a React/Type
 
 ## Tasks
 
-- [ ] 1. Set up monorepo project structure and shared utilities
-  - [ ] 1.1 Initialize monorepo with frontend (React + Vite + TypeScript + Tailwind CSS) and backend (Node.js + Express + TypeScript) directories
+- [x] 1. Set up monorepo project structure and shared utilities
+  - [x] 1.1 Initialize monorepo with frontend (React + Vite + TypeScript + Tailwind CSS) and backend (Node.js + Express + TypeScript) directories
     - Create `frontend/` and `backend/` directories with `package.json`, `tsconfig.json`
     - Set up Vite config for frontend, Express entry point for backend
     - Install core dependencies: `react`, `react-router-dom`, `tailwindcss`, `express`, `aws-sdk` (v3 clients for S3, DynamoDB, Bedrock), `pdf-parse`, `fast-check`, `vitest`
     - _Requirements: 7.1, 7.4_
 
-  - [ ] 1.2 Define shared TypeScript interfaces and types
+  - [x] 1.2 Define shared TypeScript interfaces and types
     - Create `backend/src/types/index.ts` with all API request/response interfaces from the design (`UploadRequest`, `UploadResponse`, `DocumentSearchRequest`, `DocumentSearchResponse`, `SummarizeRequest`, `SummarizeResponse`, `ResourceSearchRequest`, `ResourceSearchResponse`, `CostPredictionRequest`, `CostPredictionResponse`, `IdentifiedService`, `ErrorResponse`)
     - Create `backend/src/types/models.ts` with data model types (`DocumentSection`, `DocumentMetadata`)
     - _Requirements: 1.1, 2.1, 3.1, 4.2, 5.1, 5.2_
 
-  - [ ] 1.3 Implement error handling utilities and error sanitization middleware
+  - [x] 1.3 Implement error handling utilities and error sanitization middleware
     - Create `backend/src/utils/errors.ts` with custom error classes (`ValidationError`, `ServiceUnavailableError`, `TimeoutError`) and error codes (`UNSUPPORTED_FORMAT`, `DOCUMENT_TOO_LARGE`, `EMPTY_QUERY`, etc.)
     - Create `backend/src/middleware/errorHandler.ts` with Express error-handling middleware that sanitizes errors (strips stack traces, internal paths, AWS ARNs, account IDs) and returns `ErrorResponse` format
     - _Requirements: 8.1, 8.2, 8.3_
 
-  - [ ]\* 1.4 Write property test for error sanitization (Property 15)
+  - [x] 1.4 Write property test for error sanitization (Property 15)
     - **Property 15: Error messages do not expose internal details**
     - Generate random error objects containing stack traces, file paths, internal service names, ARNs, and exception class names; verify the sanitized user-facing message contains none of these
     - **Validates: Requirements 8.1, 8.3**
 
-  - [ ] 1.5 Implement validation utility functions
+  - [x] 1.5 Implement validation utility functions
     - Create `backend/src/utils/validation.ts` with validators for file format (PDF/TXT MIME types), page count (max 100), query string (non-empty, max 500 chars), and cost specification (non-empty, max 2000 chars)
     - Return structured validation errors using the custom error classes
     - _Requirements: 1.3, 1.4, 2.1, 5.1_
 
 - [ ] 2. Implement Document Service (upload, parse, store)
-  - [ ] 2.1 Implement document upload and parsing logic
+  - [x] 2.1 Implement document upload and parsing logic
     - Create `backend/src/services/documentService.ts` implementing `IDocumentService`
     - Implement `upload()`: validate file format and size, extract text via `pdf-parse` (PDF) or direct read (TXT), compute page count, upload raw file to S3 (`documents/{documentId}/{filename}`), split text into sections by headings, store metadata + sections in DynamoDB Documents table
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-  - [ ]\* 2.2 Write property test for upload round-trip (Property 1)
+  - [x] 2.2 Write property test for upload round-trip (Property 1)
     - **Property 1: Upload round-trip preserves document content**
     - For random valid documents, verify upload produces non-empty extracted text and a valid searchable index entry
     - **Validates: Requirements 1.1, 1.2**
 
-  - [ ]\* 2.3 Write property test for unsupported format rejection (Property 2)
+  - [ ] 2.3 Write property test for unsupported format rejection (Property 2)
     - **Property 2: Unsupported format rejection**
     - For random files with MIME types other than `application/pdf` or `text/plain`, verify the upload returns an error listing supported formats
     - **Validates: Requirements 1.3**
 
-  - [ ]\* 2.4 Write property test for upload confirmation metadata (Property 3)
+  - [ ] 2.4 Write property test for upload confirmation metadata (Property 3)
     - **Property 3: Upload confirmation contains document metadata**
     - For random successfully parsed documents, verify the response contains the original filename and accurate page count
     - **Validates: Requirements 1.5**
@@ -66,17 +66,17 @@ Incremental implementation of the AWS Doc Intelligence platform — a React/Type
     - If no results match, use Bedrock to suggest related topics from the document
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-  - [ ]\* 3.2 Write property test for search result ordering (Property 4)
+  - [ ] 3.2 Write property test for search result ordering (Property 4)
     - **Property 4: Search results are ordered by relevance score descending**
     - For random search responses with 2+ results, verify each result's relevance score ≥ the next result's score
     - **Validates: Requirements 2.1, 4.3**
 
-  - [ ]\* 3.3 Write property test for search highlights (Property 5)
+  - [ ] 3.3 Write property test for search highlights (Property 5)
     - **Property 5: Search highlights contain query terms**
     - For random document search results with highlighted text, verify highlights contain at least one term from the original query
     - **Validates: Requirements 2.2**
 
-  - [ ]\* 3.4 Write property test for search result metadata (Property 6)
+  - [ ] 3.4 Write property test for search result metadata (Property 6)
     - **Property 6: Document search results contain structural metadata**
     - For random document search results, verify each result has a non-empty section heading and page number ≥ 1
     - **Validates: Requirements 2.3**
@@ -85,12 +85,12 @@ Incremental implementation of the AWS Doc Intelligence platform — a React/Type
     - Add `summarizeDocument()` to `SearchService`: retrieve document/section text, call Bedrock Claude with a prompt to summarize (max 500 words full-doc, 200 words section), include section references in response
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-  - [ ]\* 3.6 Write property test for summary references (Property 7)
+  - [ ] 3.6 Write property test for summary references (Property 7)
     - **Property 7: Summary responses include section references**
     - For random generated summaries, verify the response includes at least one reference with section heading and page number
     - **Validates: Requirements 3.4**
 
-  - [ ]\* 3.7 Write property test for summary word count limits (Property 8)
+  - [ ] 3.7 Write property test for summary word count limits (Property 8)
     - **Property 8: Summary word count respects limits**
     - For random full-document summaries verify word count ≤ 500; for random section summaries verify word count ≤ 200
     - **Validates: Requirements 3.5**
@@ -111,12 +111,12 @@ Incremental implementation of the AWS Doc Intelligence platform — a React/Type
     - If no results found, suggest alternative search terms
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 8.2_
 
-  - [ ]\* 5.2 Write property test for resource search result fields (Property 9)
+  - [ ] 5.2 Write property test for resource search result fields (Property 9)
     - **Property 9: Resource search results contain all required fields**
     - For random resource search results, verify each has non-empty title, valid URL, non-empty snippet, and resourceType in ["blog", "video", "article"]
     - **Validates: Requirements 4.2**
 
-  - [ ]\* 5.3 Write property test for resource type filtering (Property 10)
+  - [ ] 5.3 Write property test for resource type filtering (Property 10)
     - **Property 10: Resource type filtering returns only matching types**
     - For random search results and a selected filter type, verify filtering returns only results matching that type
     - **Validates: Requirements 4.5**
@@ -135,22 +135,22 @@ Incremental implementation of the AWS Doc Intelligence platform — a React/Type
     - Return error if no AWS services can be identified
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3_
 
-  - [ ]\* 6.2 Write property test for total cost consistency (Property 11)
+  - [ ] 6.2 Write property test for total cost consistency (Property 11)
     - **Property 11: Total cost equals sum of individual service costs**
     - For random cost prediction responses with 1+ services, verify `totalEstimatedMonthlyCost` equals the sum of all `estimatedMonthlyCost` values
     - **Validates: Requirements 5.2**
 
-  - [ ]\* 6.3 Write property test for free tier completeness (Property 12)
+  - [ ] 6.3 Write property test for free tier completeness (Property 12)
     - **Property 12: Free tier info is complete for all identified services**
     - For random identified services, verify each has free tier info with eligibility, limits, and duration; if eligible, restrictions must be non-empty
     - **Validates: Requirements 5.3, 5.4**
 
-  - [ ]\* 6.4 Write property test for optimization savings (Property 13)
+  - [ ] 6.4 Write property test for optimization savings (Property 13)
     - **Property 13: Optimization suggestions include estimated savings**
     - For random optimization suggestions, verify each has non-empty suggestion text and positive estimatedSavings
     - **Validates: Requirements 6.1, 6.2**
 
-  - [ ]\* 6.5 Write property test for free tier prioritization (Property 14)
+  - [ ] 6.5 Write property test for free tier prioritization (Property 14)
     - **Property 14: Free tier is prioritized as first optimization suggestion**
     - For random free-tier-eligible services with optimization suggestions, verify the first suggestion references free tier
     - **Validates: Requirements 6.3**
