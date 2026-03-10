@@ -169,3 +169,176 @@ describe("Property 1: Upload round-trip preserves document content", () => {
     );
   });
 });
+// Feature: aws-doc-intelligence, Property 2: Unsupported format rejection
+// **Validates: Requirements 1.3**
+
+describe("Property 2: Unsupported format rejection", () => {
+  let service: DocumentService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = new DocumentService();
+  });
+
+  // Generator: MIME types that are NOT application/pdf or text/plain
+  const unsupportedMimeTypeArb = fc
+    .stringOf(
+      fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz0123456789/-+.".split("")),
+      { minLength: 1, maxLength: 50 },
+    )
+    .filter((mime) => mime !== "application/pdf" && mime !== "text/plain");
+
+  // Generator: random file content as Buffer
+  const fileBufferArb = fc
+    .uint8Array({ minLength: 1, maxLength: 100 })
+    .map((arr) => Buffer.from(arr));
+
+  // Generator: random filename
+  const randomFilenameArb = fc
+    .stringOf(
+      fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz0123456789_-.".split("")),
+      { minLength: 1, maxLength: 30 },
+    )
+    .filter((s) => s.trim().length > 0)
+    .map((name) => `${name}.dat`);
+
+  it("rejects upload with a ValidationError containing UNSUPPORTED_FORMAT code for any non-PDF/TXT MIME type", async () => {
+    const { ValidationError, ErrorCodes } = await import("../utils/errors");
+
+    await fc.assert(
+      fc.asyncProperty(
+        fileBufferArb,
+        randomFilenameArb,
+        unsupportedMimeTypeArb,
+        async (file, filename, mimeType) => {
+          try {
+            await service.upload(file, filename, mimeType);
+            // Should never reach here
+            expect.unreachable(
+              "Expected upload to throw for unsupported MIME type",
+            );
+          } catch (error) {
+            // Must be a ValidationError
+            expect(error).toBeInstanceOf(ValidationError);
+
+            const validationError = error as InstanceType<
+              typeof ValidationError
+            >;
+
+            // Error code must be UNSUPPORTED_FORMAT
+            expect(validationError.code).toBe(ErrorCodes.UNSUPPORTED_FORMAT);
+
+            // Error message must list supported formats
+            expect(validationError.message).toContain("PDF");
+            expect(validationError.message).toContain("TXT");
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+});
+
+// Feature: aws-doc-intelligence, Property 3: Upload confirmation contains document metadata
+// **Validates: Requirements 1.5**
+
+describe("Property 3: Upload confirmation contains document metadata", () => {
+  let service: DocumentService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = new DocumentService();
+  });
+
+  // Generator: non-empty text content for documents
+  const docTextArb = fc
+    .array(
+      fc.stringOf(
+        fc.constantFrom(
+          ..."abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,\n".split(
+            "",
+          ),
+        ),
+        { minLength: 1, maxLength: 200 },
+      ),
+      { minLength: 1, maxLength: 10 },
+    )
+    .map((parts) => parts.join("\n"))
+    .filter((text) => text.trim().length > 0);
+
+  // Generator: valid base filenames
+  const baseNameArb = fc
+    .stringOf(
+      fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz0123456789_-".split("")),
+      { minLength: 1, maxLength: 20 },
+    )
+    .filter((s) => s.trim().length > 0);
+
+  // Generator: random page count for PDF (1-100)
+  const pdfPageCountArb = fc.integer({ min: 1, max: 100 });
+
+  it("TXT upload response contains the original filename and accurate page count", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        docTextArb,
+        baseNameArb,
+        async (textContent, baseName) => {
+          const filename = `${baseName}.txt`;
+          const file = Buffer.from(textContent);
+
+          const result = await service.upload(file, filename, "text/plain");
+
+          // Response must contain the original filename
+          expect(result.name).toBe(filename);
+
+          // Page count must be accurate: for TXT, 1 page per ~3000 chars, minimum 1
+          const expectedPageCount = Math.max(
+            1,
+            Math.ceil(Buffer.from(textContent).toString("utf-8").length / 3000),
+          );
+          expect(result.pageCount).toBe(expectedPageCount);
+
+          // Response must have status success
+          expect(result.status).toBe("success");
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it("PDF upload response contains the original filename and accurate page count from parser", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        docTextArb,
+        baseNameArb,
+        pdfPageCountArb,
+        async (textContent, baseName, numPages) => {
+          const filename = `${baseName}.pdf`;
+          const file = Buffer.from("fake-pdf-content");
+
+          // Mock pdf-parse to return the generated text with the random page count
+          mockPdfParse.mockResolvedValueOnce({
+            text: textContent,
+            numpages: numPages,
+          });
+
+          const result = await service.upload(
+            file,
+            filename,
+            "application/pdf",
+          );
+
+          // Response must contain the original filename exactly
+          expect(result.name).toBe(filename);
+
+          // Page count must match what pdf-parse reported
+          expect(result.pageCount).toBe(numPages);
+
+          // Response must have status success
+          expect(result.status).toBe("success");
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+});
