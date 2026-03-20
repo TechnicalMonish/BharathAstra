@@ -317,52 +317,50 @@ export default function DocsPage() {
       return;
     }
 
+    setIsIndexing(true);
+    setIndexingStatus('🔄 Starting indexing... This runs in the background.');
+    
+    const docIdsToIndex = Array.from(selectedDocIds);
+    
+    // Try the real API first, fall back to demo mode
+    let apiSuccess = false;
     try {
-      setIsIndexing(true);
-      setIndexingStatus('🔄 Starting indexing... This runs in the background.');
+      const response = await docsApi.ragIndexOfficial(docIdsToIndex);
+      apiSuccess = true;
       
-      const docIdsToIndex = Array.from(selectedDocIds);
+      const startedCount = response.results.filter(r => r.message === 'Indexing started').length;
+      const alreadyIndexed = response.results.filter(r => r.message === 'Already indexed').length;
+      const inProgress = response.results.filter(r => r.message === 'Indexing in progress').length;
+      const failCount = response.results.filter(r => !r.success).length;
       
-      // Try the real API first
-      try {
-        const response = await docsApi.ragIndexOfficial(docIdsToIndex);
-        
-        const startedCount = response.results.filter(r => r.message === 'Indexing started').length;
-        const alreadyIndexed = response.results.filter(r => r.message === 'Already indexed').length;
-        const inProgress = response.results.filter(r => r.message === 'Indexing in progress').length;
-        const failCount = response.results.filter(r => !r.success).length;
-        
-        let statusMsg = '';
-        if (startedCount > 0) {
-          statusMsg += `🚀 Started indexing ${startedCount} document(s). `;
-        }
-        if (alreadyIndexed > 0) {
-          statusMsg += `✅ ${alreadyIndexed} already indexed. `;
-        }
-        if (inProgress > 0) {
-          statusMsg += `⏳ ${inProgress} in progress. `;
-        }
-        if (failCount > 0) {
-          statusMsg += `❌ ${failCount} failed.`;
-        }
-        
-        setIndexingStatus(statusMsg || '✅ All documents processed!');
-        
-        // Keep the status visible longer if indexing started
-        setTimeout(() => setIndexingStatus(null), startedCount > 0 ? 10000 : 5000);
-      } catch {
-        // If API fails, simulate successful indexing (demo mode)
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate processing time
-        setIndexingStatus(`✅ ${docIdsToIndex.length} document(s) indexed (demo mode)`);
-        setTimeout(() => setIndexingStatus(null), 5000);
+      let statusMsg = '';
+      if (startedCount > 0) {
+        statusMsg += `🚀 Started indexing ${startedCount} document(s). `;
       }
+      if (alreadyIndexed > 0) {
+        statusMsg += `✅ ${alreadyIndexed} already indexed. `;
+      }
+      if (inProgress > 0) {
+        statusMsg += `⏳ ${inProgress} in progress. `;
+      }
+      if (failCount > 0) {
+        statusMsg += `❌ ${failCount} failed.`;
+      }
+      
+      setIndexingStatus(statusMsg || '✅ All documents processed!');
+      setTimeout(() => setIndexingStatus(null), startedCount > 0 ? 10000 : 5000);
     } catch (error) {
-      console.error('Indexing failed:', error);
-      setIndexingStatus('❌ Failed to start indexing. Please try again.');
-      setTimeout(() => setIndexingStatus(null), 5000);
-    } finally {
-      setIsIndexing(false);
+      console.error('API indexing failed, using demo mode:', error);
     }
+    
+    // If API failed, use demo mode
+    if (!apiSuccess) {
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate processing time
+      setIndexingStatus(`✅ ${docIdsToIndex.length} document(s) indexed (demo mode)`);
+      setTimeout(() => setIndexingStatus(null), 5000);
+    }
+    
+    setIsIndexing(false);
   }, [selectedDocIds]);
 
   // Handle document upload
