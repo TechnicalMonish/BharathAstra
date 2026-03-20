@@ -350,6 +350,106 @@ export class RAGPipeline {
     // Delete cache
     await this.contentCache.delete(docId);
   }
+
+  /**
+   * Index a custom uploaded document (text content).
+   * Parses, chunks, embeds, and stores in vector store.
+   */
+  async indexCustomDocument(
+    docId: string,
+    title: string,
+    textContent: string,
+    category: string
+  ): Promise<IndexResult> {
+    const errors: string[] = [];
+    let totalChunks = 0;
+    let totalSections = 0;
+
+    try {
+      // Update index status to 'indexing'
+      await this.updateIndexStatus(docId, "indexing", title, category, "custom://upload");
+
+      // Delete existing chunks (for re-indexing)
+      await this.vectorStore.deleteByDocId(docId);
+
+      // Parse the text content as if it were HTML (handles plain text too)
+      // Use a valid URL format for the parser
+      const parsed = this.contentParser.parseHtml(
+        `<html><body><h1>${title}</h1><div>${textContent}</div></body></html>`,
+        `https://custom.local/${docId}`
+      );
+      totalSections = parsed.sections.length;
+
+      // Chunk the document
+      const chunks = this.contentChunker.chunkDocument(parsed, docId);
+
+      console.log(`Custom doc ${docId}: Generated ${chunks.length} chunks from ${totalSections} sections`);
+
+      // Generate embeddings and store
+      const batchSize = 10;
+      for (let i = 0; i < chunks.length; i += batchSize) {
+        const batch = chunks.slice(i, i + batchSize);
+        
+        for (const chunk of batch) {
+          try {
+            const embedding = await this.embeddingGenerator.generateEmbedding(
+              chunk.content
+            );
+            await this.vectorStore.storeChunk(chunk, embedding, "custom://upload");
+            totalChunks++;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "Unknown error";
+            errors.push(`Failed to embed chunk ${chunk.chunkId}: ${msg}`);
+          }
+        }
+      }
+
+      // Update index status
+      const status = errors.length === 0 ? "ready" : "failed";
+      await this.updateIndexStatus(
+        docId,
+        status,
+        title,
+        category,
+        "custom://upload",
+        totalChunks,
+        totalSections,
+        errors
+      );
+
+      return {
+        docId,
+        title,
+        sections: totalSections,
+        indexedAt: new Date(),
+        success: errors.length === 0,
+        errors: errors.length > 0 ? errors : undefined,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      errors.push(msg);
+
+      await this.updateIndexStatus(
+        docId,
+        "failed",
+        title,
+        category,
+        "custom://upload",
+        0,
+        0,
+        errors
+      );
+
+      return {
+        docId,
+        title,
+        sections: 0,
+        indexedAt: new Date(),
+        success: false,
+        errors,
+      };
+    }
+  }
 }
 
 // Export singleton instance

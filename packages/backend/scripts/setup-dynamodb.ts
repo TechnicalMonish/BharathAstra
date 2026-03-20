@@ -127,15 +127,15 @@ async function createTable(table: TableDefinition): Promise<void> {
 
   console.log(`📦 Creating table ${table.name}...`);
 
-  const keySchema = [
-    { AttributeName: table.partitionKey.name, KeyType: "HASH" as const },
+  const keySchema: Array<{ AttributeName: string; KeyType: "HASH" | "RANGE" }> = [
+    { AttributeName: table.partitionKey.name, KeyType: "HASH" },
   ];
-  const attributeDefinitions = [
+  const attributeDefinitions: Array<{ AttributeName: string; AttributeType: "S" | "N" }> = [
     { AttributeName: table.partitionKey.name, AttributeType: table.partitionKey.type },
   ];
 
   if (table.sortKey) {
-    keySchema.push({ AttributeName: table.sortKey.name, KeyType: "RANGE" as const });
+    keySchema.push({ AttributeName: table.sortKey.name, KeyType: "RANGE" });
     attributeDefinitions.push({
       AttributeName: table.sortKey.name,
       AttributeType: table.sortKey.type,
@@ -157,11 +157,11 @@ async function createTable(table: TableDefinition): Promise<void> {
       });
     }
 
-    const gsiKeySchema = [
-      { AttributeName: gsi.partitionKey.name, KeyType: "HASH" as const },
+    const gsiKeySchema: Array<{ AttributeName: string; KeyType: "HASH" | "RANGE" }> = [
+      { AttributeName: gsi.partitionKey.name, KeyType: "HASH" },
     ];
     if (gsi.sortKey) {
-      gsiKeySchema.push({ AttributeName: gsi.sortKey.name, KeyType: "RANGE" as const });
+      gsiKeySchema.push({ AttributeName: gsi.sortKey.name, KeyType: "RANGE" });
     }
 
     return {

@@ -329,66 +329,100 @@ export default function DocsPage() {
     
     const docIdsToIndex = Array.from(selectedDocIds);
     
-    // Try the real API first, fall back to demo mode
-    let apiSuccess = false;
-    try {
-      const response = await docsApi.ragIndexOfficial(docIdsToIndex);
-      apiSuccess = true;
+    // Separate custom uploads from official docs
+    const customDocIds = docIdsToIndex.filter(id => id.startsWith('custom-'));
+    const officialDocIds = docIdsToIndex.filter(id => !id.startsWith('custom-'));
+    
+    let totalStarted = 0;
+    let totalAlreadyIndexed = 0;
+    let totalFailed = 0;
+    
+    // Get stored content for custom documents
+    const storedContents = localStorage.getItem('customUploadContents');
+    const customContents = storedContents ? JSON.parse(storedContents) as Record<string, string> : {};
+    
+    // Index custom documents first
+    for (const docId of customDocIds) {
+      const doc = documents.find(d => d.docId === docId);
+      if (!doc) continue;
       
-      const startedCount = response.results.filter(r => r.message === 'Indexing started').length;
-      const alreadyIndexed = response.results.filter(r => r.message === 'Already indexed').length;
-      const inProgress = response.results.filter(r => r.message === 'Indexing in progress').length;
-      const failCount = response.results.filter(r => !r.success).length;
-      
-      let statusMsg = '';
-      if (startedCount > 0) {
-        statusMsg += `🚀 Started indexing ${startedCount} document(s). `;
+      try {
+        // Get content from localStorage or use placeholder
+        const content = customContents[docId] || 
+          `This is the content of ${doc.title}. Category: ${doc.category}. This document was uploaded as a custom document.`;
+        
+        await docsApi.ragIndexCustom(docId, doc.title, content, doc.category);
+        totalStarted++;
+        console.log(`Indexed custom doc: ${docId}`);
+      } catch (error) {
+        console.error(`Failed to index custom doc ${docId}:`, error);
+        totalFailed++;
       }
-      if (alreadyIndexed > 0) {
-        statusMsg += `✅ ${alreadyIndexed} already indexed. `;
-      }
-      if (inProgress > 0) {
-        statusMsg += `⏳ ${inProgress} in progress. `;
-      }
-      if (failCount > 0) {
-        statusMsg += `❌ ${failCount} failed.`;
-      }
-      
-      setIndexingStatus(statusMsg || '✅ All documents processed!');
-      setTimeout(() => setIndexingStatus(null), startedCount > 0 ? 10000 : 5000);
-    } catch (error) {
-      console.error('API indexing failed, using demo mode:', error);
     }
     
-    // If API failed, use demo mode
-    if (!apiSuccess) {
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate processing time
-      setIndexingStatus(`✅ ${docIdsToIndex.length} document(s) indexed (demo mode)`);
-      setTimeout(() => setIndexingStatus(null), 5000);
+    // Index official AWS docs
+    if (officialDocIds.length > 0) {
+      try {
+        const response = await docsApi.ragIndexOfficial(officialDocIds);
+        
+        totalStarted += response.results.filter(r => r.message === 'Indexing started').length;
+        totalAlreadyIndexed += response.results.filter(r => r.message === 'Already indexed').length;
+        totalFailed += response.results.filter(r => !r.success).length;
+      } catch (error) {
+        console.error('API indexing failed:', error);
+        totalFailed += officialDocIds.length;
+      }
     }
+    
+    // Build status message
+    let statusMsg = '';
+    if (totalStarted > 0) {
+      statusMsg += `🚀 Started indexing ${totalStarted} document(s). `;
+    }
+    if (totalAlreadyIndexed > 0) {
+      statusMsg += `✅ ${totalAlreadyIndexed} already indexed. `;
+    }
+    if (totalFailed > 0) {
+      statusMsg += `❌ ${totalFailed} failed.`;
+    }
+    
+    setIndexingStatus(statusMsg || '✅ All documents processed!');
+    setTimeout(() => setIndexingStatus(null), totalStarted > 0 ? 10000 : 5000);
     
     setIsIndexing(false);
-  }, [selectedDocIds]);
+  }, [selectedDocIds, documents]);
 
   // Handle document upload
   const handleUpload = useCallback(async (file: File, name: string, category: string, onProgress: (progress: number) => void) => {
     try {
+      // Read file content for RAG indexing
+      const fileContent = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+
       // Simulate upload progress
-      for (let i = 0; i <= 100; i += 10) {
+      for (let i = 0; i <= 70; i += 10) {
         await new Promise(resolve => setTimeout(resolve, 100));
         onProgress(i);
       }
 
+      const docId = `custom-${Date.now()}`;
+      
       // Try to use the actual API
+      let apiSuccess = false;
       try {
         await docsApi.upload(file, onProgress);
         const response = await docsApi.list();
         const docs = (response.documents || []) as DocumentInfo[];
         setDocuments(docs);
+        apiSuccess = true;
       } catch {
         // If API fails, add mock document locally and persist to localStorage
         const newDoc: DocumentInfo = {
-          docId: `custom-${Date.now()}`,
+          docId,
           title: name,
           category: category,
           type: 'custom_upload',
@@ -397,14 +431,33 @@ export default function DocsPage() {
           selected: false,
         };
         
-        // Save to localStorage for persistence
+        // Save document info to localStorage for persistence
         const storedUploads = localStorage.getItem('customUploads');
         const customUploads = storedUploads ? JSON.parse(storedUploads) as DocumentInfo[] : [];
         customUploads.unshift(newDoc);
         localStorage.setItem('customUploads', JSON.stringify(customUploads));
         
+        // Also save the file content for later RAG indexing
+        const storedContents = localStorage.getItem('customUploadContents');
+        const customContents = storedContents ? JSON.parse(storedContents) as Record<string, string> : {};
+        customContents[docId] = fileContent;
+        localStorage.setItem('customUploadContents', JSON.stringify(customContents));
+        
         setDocuments(prev => [newDoc, ...prev]);
       }
+
+      onProgress(80);
+
+      // Index into RAG for semantic search
+      try {
+        await docsApi.ragIndexCustom(docId, name, fileContent, category);
+        console.log(`Document ${docId} indexed into RAG`);
+      } catch (ragError) {
+        console.error('Failed to index into RAG:', ragError);
+        // Continue anyway - document is still uploaded
+      }
+
+      onProgress(100);
     } catch (error) {
       console.error('Upload failed:', error);
       throw error;

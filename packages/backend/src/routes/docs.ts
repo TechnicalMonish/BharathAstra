@@ -182,6 +182,21 @@ router.post(
       category: typeof category === "string" ? category : undefined,
     });
 
+    // Also index into RAG pipeline for semantic search
+    try {
+      const ragPipeline = getRAGPipeline();
+      await ragPipeline.indexCustomDocument(
+        docInfo.docId,
+        name,
+        buffer.toString("utf-8"),
+        category || "Custom"
+      );
+      console.log(`Custom document ${docInfo.docId} indexed into RAG pipeline`);
+    } catch (err) {
+      console.error("Failed to index custom doc into RAG:", err);
+      // Continue anyway - legacy search will still work
+    }
+
     res.status(201).json({ document: docInfo });
   })
 );
@@ -644,6 +659,45 @@ router.post(
     res.json({
       indexedAt: new Date().toISOString(),
       results,
+    });
+  })
+);
+
+// --- POST /rag/index-custom - Index a custom uploaded document into RAG ---
+router.post(
+  "/rag/index-custom",
+  asyncHandler(async (req, res) => {
+    const { docId, title, content, category } = req.body;
+
+    if (!docId || typeof docId !== "string") {
+      throw new AppError(400, "BadRequest", "docId is required");
+    }
+
+    if (!title || typeof title !== "string") {
+      throw new AppError(400, "BadRequest", "title is required");
+    }
+
+    if (!content || typeof content !== "string") {
+      throw new AppError(400, "BadRequest", "content is required");
+    }
+
+    const ragPipeline = getRAGPipeline();
+
+    // Index the custom document
+    const result = await ragPipeline.indexCustomDocument(
+      docId,
+      title,
+      content,
+      category || "Custom"
+    );
+
+    res.status(result.success ? 201 : 500).json({
+      docId: result.docId,
+      title: result.title,
+      sections: result.sections,
+      indexedAt: result.indexedAt,
+      success: result.success,
+      errors: result.errors,
     });
   })
 );

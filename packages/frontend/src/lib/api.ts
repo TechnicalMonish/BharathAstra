@@ -138,6 +138,17 @@ export const docsApi = {
       errors?: string[];
     }>('/docs/rag/index', { docUrl, docId, title, category }),
   
+  // RAG index custom - index a custom uploaded document for RAG
+  ragIndexCustom: (docId: string, title: string, content: string, category?: string) =>
+    api.post<{
+      docId: string;
+      title: string;
+      sections: number;
+      indexedAt: string;
+      success: boolean;
+      errors?: string[];
+    }>('/docs/rag/index-custom', { docId, title, content, category }),
+  
   // RAG index official - index predefined AWS documentation
   ragIndexOfficial: (docIds?: string[]) =>
     api.post<{
