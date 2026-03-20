@@ -94,11 +94,18 @@ export default function DocsPage() {
         setLoadingDocs(true);
         const response = await docsApi.list();
         const docs = (response.documents || []) as DocumentInfo[];
-        setDocuments(docs);
+        
+        // Merge with any locally stored custom uploads
+        const storedUploads = localStorage.getItem('customUploads');
+        const customUploads = storedUploads ? JSON.parse(storedUploads) as DocumentInfo[] : [];
+        
+        setDocuments([...customUploads, ...docs]);
       } catch (error) {
         console.error('Failed to load documents:', error);
-        // Set mock data for development
-        setDocuments(getMockDocuments());
+        // Set mock data for development, merged with local uploads
+        const storedUploads = localStorage.getItem('customUploads');
+        const customUploads = storedUploads ? JSON.parse(storedUploads) as DocumentInfo[] : [];
+        setDocuments([...customUploads, ...getMockDocuments()]);
       } finally {
         setLoadingDocs(false);
       }
@@ -379,7 +386,7 @@ export default function DocsPage() {
         const docs = (response.documents || []) as DocumentInfo[];
         setDocuments(docs);
       } catch {
-        // If API fails, add mock document locally
+        // If API fails, add mock document locally and persist to localStorage
         const newDoc: DocumentInfo = {
           docId: `custom-${Date.now()}`,
           title: name,
@@ -389,6 +396,13 @@ export default function DocsPage() {
           lastUpdated: new Date().toISOString(),
           selected: false,
         };
+        
+        // Save to localStorage for persistence
+        const storedUploads = localStorage.getItem('customUploads');
+        const customUploads = storedUploads ? JSON.parse(storedUploads) as DocumentInfo[] : [];
+        customUploads.unshift(newDoc);
+        localStorage.setItem('customUploads', JSON.stringify(customUploads));
+        
         setDocuments(prev => [newDoc, ...prev]);
       }
     } catch (error) {
@@ -401,10 +415,26 @@ export default function DocsPage() {
   const handleDeleteDoc = useCallback(async (docId: string) => {
     try {
       setIsDeleting(true);
-      await docsApi.delete(docId);
+      
+      // Try API delete first
+      try {
+        await docsApi.delete(docId);
+      } catch {
+        // If API fails, just continue with local delete
+      }
       
       // Remove from documents list
       setDocuments((prev) => prev.filter((d) => d.docId !== docId));
+      
+      // Remove from localStorage if it's a custom upload
+      if (docId.startsWith('custom-')) {
+        const storedUploads = localStorage.getItem('customUploads');
+        if (storedUploads) {
+          const customUploads = JSON.parse(storedUploads) as DocumentInfo[];
+          const filtered = customUploads.filter(d => d.docId !== docId);
+          localStorage.setItem('customUploads', JSON.stringify(filtered));
+        }
+      }
       
       // Remove from selection if selected
       setSelectedDocIds((prev) => {
