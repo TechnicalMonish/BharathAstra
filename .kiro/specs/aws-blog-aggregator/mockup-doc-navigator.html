@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Developer Intelligence - Documentation Navigator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #232F3E; }
+
+        .navbar {
+            background: #232F3E;
+            padding: 12px 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: white;
+        }
+        .navbar .logo { display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: bold; }
+        .navbar .logo span { color: #FF9900; }
+        .nav-links { display: flex; gap: 25px; }
+        .nav-links a { color: #ccc; text-decoration: none; font-size: 14px; padding: 6px 12px; border-radius: 6px; }
+        .nav-links a.active { color: white; background: rgba(255,153,0,0.2); }
+        .user-avatar {
+            width: 36px; height: 36px; background: #FF9900; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;
+        }
+
+        .main { display: flex; height: calc(100vh - 56px); }
+
+        /* Left: Document Viewer */
+        .doc-viewer {
+            flex: 1;
+            background: white;
+            overflow-y: auto;
+            padding: 40px 60px;
+            position: relative;
+        }
+        .doc-breadcrumb {
+            font-size: 13px;
+            color: #999;
+            margin-bottom: 20px;
+        }
+        .doc-breadcrumb a { color: #FF9900; text-decoration: none; }
+        .doc-title {
+            font-size: 32px;
+            font-weight: bold;
+            color: #232F3E;
+            margin-bottom: 8px;
+        }
+        .doc-subtitle {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .doc-section-title {
+            font-size: 22px;
+            font-weight: bold;
+            color: #232F3E;
+            margin: 25px 0 12px 0;
+        }
+        .doc-text {
+            font-size: 15px;
+            line-height: 1.8;
+            color: #444;
+            margin-bottom: 15px;
+        }
+        .doc-highlight {
+            background: linear-gradient(120deg, #FFE082 0%, #FFCC02 100%);
+            padding: 2px 4px;
+            border-radius: 3px;
+            position: relative;
+        }
+        .doc-highlight-block {
+            background: linear-gradient(120deg, #FFF8E1 0%, #FFF3E0 100%);
+            border-left: 4px solid #FF9900;
+            padding: 15px 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 15px 0;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(255,153,0,0.15);
+        }
+        .highlight-badge {
+            position: absolute;
+            top: -10px;
+            right: 10px;
+            background: #FF9900;
+            color: white;
+            font-size: 10px;
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+        .doc-code {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.7;
+            margin: 15px 0;
+            position: relative;
+            overflow-x: auto;
+        }
+        .code-lang {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            font-size: 11px;
+            color: #888;
+        }
+        .code-keyword { color: #569cd6; }
+        .code-string { color: #ce9178; }
+        .code-comment { color: #6a9955; }
+        .code-func { color: #dcdcaa; }
+        .code-var { color: #9cdcfe; }
+        .doc-note {
+            background: #E3F2FD;
+            border-left: 4px solid #2196F3;
+            padding: 12px 18px;
+            border-radius: 0 8px 8px 0;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        .doc-warning {
+            background: #FFF3E0;
+            border-left: 4px solid #FF9800;
+            padding: 12px 18px;
+            border-radius: 0 8px 8px 0;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        .toc-float {
+            position: fixed;
+            left: 20px;
+            top: 80px;
+            width: 200px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            display: none;
+        }
+
+        /* Right: AI Sidebar */
+        .ai-sidebar {
+            width: 420px;
+            background: #fafafa;
+            border-left: 2px solid #FF9900;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .sidebar-header {
+            background: #232F3E;
+            color: white;
+            padding: 18px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sidebar-header h3 { font-size: 16px; }
+        .ai-badge {
+            background: #FF9900;
+            color: white;
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .chat-msg {
+            margin-bottom: 18px;
+            display: flex;
+            gap: 10px;
+        }
+        .chat-avatar {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .avatar-user { background: #FF9900; color: white; font-weight: bold; font-size: 12px; }
+        .avatar-ai { background: #232F3E; color: #FF9900; }
+        .chat-bubble {
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            max-width: 340px;
+        }
+        .bubble-user {
+            background: #FF9900;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .bubble-ai {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-bottom-left-radius: 4px;
+        }
+
+        .ai-answer-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 15px;
+        }
+        .ai-answer-card h4 {
+            font-size: 14px;
+            color: #232F3E;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .ai-answer-text {
+            font-size: 13px;
+            line-height: 1.7;
+            color: #444;
+        }
+        .ai-source {
+            margin-top: 10px;
+            font-size: 11px;
+            color: #999;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .ai-source a { color: #FF9900; text-decoration: none; }
+
+        .ai-code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            margin: 10px 0;
+            position: relative;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            background: #444;
+            color: #ccc;
+            border: none;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            cursor: pointer;
+        }
+
+        .reading-path {
+            background: #E8F5E9;
+            border: 1px solid #A5D6A7;
+            border-radius: 10px;
+            padding: 14px;
+            margin: 10px 0;
+        }
+        .reading-path h4 {
+            font-size: 13px;
+            color: #2E7D32;
+            margin-bottom: 8px;
+        }
+        .path-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 6px 0;
+            font-size: 12px;
+        }
+        .step-num {
+            width: 22px; height: 22px;
+            background: #2E7D32;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        .step-done { background: #A5D6A7; }
+        .step-current { background: #FF9900; }
+
+        .related-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .related-tag {
+            background: #f0f0f0;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            color: #666;
+        }
+
+        /* Input Area */
+        .input-area {
+            padding: 15px;
+            border-top: 1px solid #e0e0e0;
+            background: white;
+        }
+        .input-row {
+            display: flex;
+            gap: 8px;
+        }
+        .input-field {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+        }
+        .input-field:focus { border-color: #FF9900; }
+        .send-btn {
+            width: 44px; height: 44px;
+            background: #FF9900;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        .quick-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .quick-btn {
+            background: #f0f0f0;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            cursor: pointer;
+            color: #666;
+        }
+        .quick-btn:hover { background: #FF9900; color: white; }
+
+        .history-section {
+            padding: 10px 15px;
+            border-top: 1px solid #e0e0e0;
+            background: #f5f5f5;
+        }
+        .history-title {
+            font-size: 11px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+        .history-item {
+            font-size: 12px;
+            color: #666;
+            padding: 5px 0;
+            cursor: pointer;
+        }
+        .history-item:hover { color: #FF9900; }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <div class="navbar">
+        <div class="logo">
+            <span>⚡</span> AWS Developer <span>Intelligence</span>
+        </div>
+        <div class="nav-links">
+            <a href="#">Dashboard</a>
+            <a href="#" class="active">📚 Doc Navigator</a>
+            <a href="#">🌐 Blog Aggregator</a>
+            <a href="#">💰 Cost Predictor</a>
+            <a href="#">📊 Analytics</a>
+        </div>
+        <div style="display:flex; align-items:center; gap:15px;">
+            <span style="font-size:13px; color:#ccc;">🔔</span>
+            <div class="user-avatar">DS</div>
+        </div>
+    </div>
+
+    <div class="main">
+        <!-- Document Viewer -->
+        <div class="doc-viewer">
+            <div class="doc-breadcrumb">
+                <a href="#">AWS Docs</a> › <a href="#">Lambda</a> › <a href="#">Permissions</a> › Resource-based Policies
+            </div>
+
+            <div class="doc-title">AWS Lambda Resource-based Policies</div>
+            <div class="doc-subtitle">Learn how to use resource-based policies to grant permissions to other AWS services and accounts</div>
+
+            <div class="doc-section-title">Overview</div>
+            <div class="doc-text">
+                AWS Lambda supports resource-based permissions policies for Lambda functions and layers. Resource-based policies let you grant usage permission to other AWS accounts or organizations on a per-resource basis. You also use a resource-based policy to allow an AWS service to invoke your function.
+            </div>
+
+            <div class="doc-section-title">3.2 Resource-based Policy Statements</div>
+
+            <div class="doc-highlight-block">
+                <span class="highlight-badge">🔍 AI FOUND THIS</span>
+                <div class="doc-text" style="margin:0;">
+                    To give other accounts and AWS services permission to use your Lambda function, use the <span class="doc-highlight">add-permission</span> command. For example, to grant Amazon S3 permission to invoke your function, use the following command with the <span class="doc-highlight">--principal s3.amazonaws.com</span> parameter and specify the S3 bucket ARN as the <span class="doc-highlight">--source-arn</span>.
+                </div>
+            </div>
+
+            <div class="doc-code">
+                <span class="code-lang">AWS CLI</span>
+                <span class="code-comment"># Grant S3 permission to invoke Lambda function</span><br>
+                <span class="code-func">aws</span> lambda <span class="code-keyword">add-permission</span> \<br>
+                &nbsp;&nbsp;--function-name <span class="code-string">my-function</span> \<br>
+                &nbsp;&nbsp;--principal <span class="code-string">s3.amazonaws.com</span> \<br>
+                &nbsp;&nbsp;--statement-id <span class="code-string">s3-invoke</span> \<br>
+                &nbsp;&nbsp;--action <span class="code-string">lambda:InvokeFunction</span> \<br>
+                &nbsp;&nbsp;--source-arn <span class="code-string">arn:aws:s3:::my-bucket</span> \<br>
+                &nbsp;&nbsp;--source-account <span class="code-string">123456789012</span>
+            </div>
+
+            <div class="doc-note">
+                📘 <strong>Note:</strong> Each Lambda function can have a single resource-based policy with up to 20 KB of policy statements.
+            </div>
+
+            <div class="doc-section-title">3.3 Cross-Account Access</div>
+            <div class="doc-text">
+                To grant cross-account access, specify the full account ID in the principal. The following example grants account 210987654321 permission to invoke the function.
+            </div>
+
+            <div class="doc-code">
+                <span class="code-lang">AWS CLI</span>
+                <span class="code-func">aws</span> lambda <span class="code-keyword">add-permission</span> \<br>
+                &nbsp;&nbsp;--function-name <span class="code-string">my-function</span> \<br>
+                &nbsp;&nbsp;--principal <span class="code-string">210987654321</span> \<br>
+                &nbsp;&nbsp;--statement-id <span class="code-string">cross-account</span> \<br>
+                &nbsp;&nbsp;--action <span class="code-string">lambda:InvokeFunction</span>
+            </div>
+
+            <div class="doc-warning">
+                ⚠️ <strong>Important:</strong> When you grant cross-account access, the other account must also have an IAM policy that allows the user to call the Lambda API.
+            </div>
+
+            <div class="doc-section-title">3.4 Viewing Resource-based Policies</div>
+            <div class="doc-text">
+                To view a function's resource-based policy, use the get-policy command. This returns the JSON policy document attached to the specified function.
+            </div>
+
+            <div class="doc-code">
+                <span class="code-lang">AWS CLI</span>
+                <span class="code-func">aws</span> lambda <span class="code-keyword">get-policy</span> \<br>
+                &nbsp;&nbsp;--function-name <span class="code-string">my-function</span>
+            </div>
+
+            <div class="doc-text">
+                The output includes the policy document and a revision ID. You can use the revision ID to update the policy with the add-permission command.
+            </div>
+        </div>
+
+        <!-- AI Sidebar -->
+        <div class="ai-sidebar">
+            <div class="sidebar-header">
+                <span style="font-size:22px;">🤖</span>
+                <h3>AI Documentation Assistant</h3>
+                <span class="ai-badge">POWERED BY BEDROCK</span>
+            </div>
+
+            <div class="chat-area">
+                <!-- User Question -->
+                <div class="chat-msg" style="justify-content:flex-end;">
+                    <div class="chat-bubble bubble-user">
+                        How do I give Lambda permission to read from S3?
+                    </div>
+                    <div class="chat-avatar avatar-user">DS</div>
+                </div>
+
+                <!-- AI Response -->
+                <div class="chat-msg">
+                    <div class="chat-avatar avatar-ai">🤖</div>
+                    <div>
+                        <!-- Reading Path -->
+                        <div class="reading-path">
+                            <h4>📖 Recommended Reading Path</h4>
+                            <div class="path-step">
+                                <span class="step-num step-done">✓</span>
+                                <span>IAM Roles Basics (Section 1.1) - 3 min</span>
+                            </div>
+                            <div class="path-step">
+                                <span class="step-num step-current">2</span>
+                                <span><strong>Resource Policies (Section 3.2)</strong> - 5 min</span>
+                            </div>
+                            <div class="path-step">
+                                <span class="step-num">3</span>
+                                <span>S3 Event Notifications (Section 4.1) - 4 min</span>
+                            </div>
+                        </div>
+
+                        <!-- Direct Answer -->
+                        <div class="ai-answer-card">
+                            <h4>📍 Direct Answer</h4>
+                            <div class="ai-answer-text">
+                                To give Lambda permission to read from S3, you need to use the <strong>add-permission</strong> CLI command with <strong>s3.amazonaws.com</strong> as the principal. Specify your S3 bucket ARN as the source.
+                            </div>
+                            <div class="ai-source">
+                                📄 Source: <a href="#">Section 3.2 - Resource-based Policies</a> (highlighted in doc →)
+                            </div>
+                        </div>
+
+                        <!-- Code Snippet -->
+                        <div class="ai-answer-card">
+                            <h4>💻 Code Example</h4>
+                            <div class="ai-code-block">
+                                <button class="copy-btn">📋 Copy</button>
+                                <span style="color:#6a9955;"># Grant S3 read permission</span><br>
+                                <span style="color:#dcdcaa;">aws</span> lambda add-permission \<br>
+                                &nbsp;&nbsp;--function-name <span style="color:#ce9178;">my-function</span> \<br>
+                                &nbsp;&nbsp;--principal <span style="color:#ce9178;">s3.amazonaws.com</span> \<br>
+                                &nbsp;&nbsp;--statement-id <span style="color:#ce9178;">s3-read</span> \<br>
+                                &nbsp;&nbsp;--action <span style="color:#ce9178;">lambda:InvokeFunction</span> \<br>
+                                &nbsp;&nbsp;--source-arn <span style="color:#ce9178;">arn:aws:s3:::YOUR-BUCKET</span>
+                            </div>
+                        </div>
+
+                        <!-- IAM Role -->
+                        <div class="ai-answer-card">
+                            <h4>🔐 Also Needed: IAM Execution Role</h4>
+                            <div class="ai-answer-text">
+                                Your Lambda function also needs an <strong>execution role</strong> with S3 read permissions:
+                            </div>
+                            <div class="ai-code-block">
+                                <button class="copy-btn">📋 Copy</button>
+                                <span style="color:#6a9955;">// IAM Policy for Lambda</span><br>
+                                {<br>
+                                &nbsp;&nbsp;<span style="color:#9cdcfe;">"Effect"</span>: <span style="color:#ce9178;">"Allow"</span>,<br>
+                                &nbsp;&nbsp;<span style="color:#9cdcfe;">"Action"</span>: [<br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ce9178;">"s3:GetObject"</span>,<br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ce9178;">"s3:ListBucket"</span><br>
+                                &nbsp;&nbsp;],<br>
+                                &nbsp;&nbsp;<span style="color:#9cdcfe;">"Resource"</span>: <span style="color:#ce9178;">"arn:aws:s3:::YOUR-BUCKET/*"</span><br>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Related -->
+                        <div class="related-tags">
+                            <span class="related-tag">🔗 S3 Events</span>
+                            <span class="related-tag">🔗 IAM Roles</span>
+                            <span class="related-tag">🔗 Cross-Account</span>
+                            <span class="related-tag">🔗 VPC Access</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History -->
+            <div class="history-section">
+                <div class="history-title">Recent Questions</div>
+                <div class="history-item">💬 How to set Lambda timeout?</div>
+                <div class="history-item">💬 What's the max memory for Lambda?</div>
+                <div class="history-item">💬 Lambda vs Step Functions?</div>
+            </div>
+
+            <!-- Input -->
+            <div class="input-area">
+                <div class="input-row">
+                    <input class="input-field" type="text" placeholder="Ask about AWS documentation...">
+                    <button class="send-btn">➤</button>
+                </div>
+                <div class="quick-actions">
+                    <button class="quick-btn">📎 Upload Doc</button>
+                    <button class="quick-btn">💻 Show Code</button>
+                    <button class="quick-btn">📖 Reading Path</button>
+                    <button class="quick-btn">🔍 Related Topics</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
